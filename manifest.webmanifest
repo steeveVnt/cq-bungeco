@@ -1,0 +1,15 @@
+{
+  "name": "Bung'Eco — Contrôle qualité",
+  "short_name": "CQ Bung'Eco",
+  "description": "Fiche de contrôle qualité des modules, hors ligne.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#16324f",
+  "theme_color": "#16324f",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
