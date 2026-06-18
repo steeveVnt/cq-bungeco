@@ -1208,11 +1208,11 @@ async function exportById(id){ const f=await idbGet('fiches',id); if(f){await bu
 async function buildAndDeliver(f){
   if(!(window.jspdf&&window.jspdf.jsPDF)){toast('Module PDF indisponible');return;}
   toast('Génération du PDF…');
-  try{
-    const blob=await generatePDF(f);
-    const safe=(f.numero||'fiche').replace(/[^\w\-]+/g,'_').replace(/^_+|_+$/g,'')||'fiche';
-    await deliverPDF(blob,`Controle_${safe}_${f.date||todayISO()}.pdf`);
-  }catch(err){console.error(err);toast('Erreur lors de la génération');}
+  let blob;
+  try{ blob=await generatePDF(f); }
+  catch(err){ console.error(err); toast('Erreur lors de la génération'); return; }
+  const safe=(f.numero||'fiche').replace(/[^\w\-]+/g,'_').replace(/^_+|_+$/g,'')||'fiche';
+  presentPdf(blob,`Controle_${safe}_${f.date||todayISO()}.pdf`);
 }
 
 function sane(t){return (t||'').replace(/[\u2013\u2014]/g,'-').replace(/[\u2018\u2019]/g,"'").replace(/\u2026/g,'...').replace(/[\u201C\u201D]/g,'"');}
@@ -1332,14 +1332,29 @@ async function generatePDF(f){
   return doc.output('blob');
 }
 
-async function deliverPDF(blob,filename){
+function presentPdf(blob,filename){
   const file=new File([blob],filename,{type:'application/pdf'});
-  if(navigator.canShare&&navigator.canShare({files:[file]})){
-    try{await navigator.share({files:[file],title:filename});return;}catch(e){if(e&&e.name==='AbortError')return;}
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    // iOS / mobile : le partage doit partir d'un nouvel appui, sinon iOS le bloque
+    const ov=document.createElement('div');ov.className='modal-overlay';
+    ov.innerHTML=`<div class="modal">
+      <div class="modal-msg">Votre PDF est prêt :<br><b>${escapeHtml(filename)}</b></div>
+      <div class="modal-actions">
+        <button class="modal-cancel" id="pdfClose">Fermer</button>
+        <button class="modal-ok" id="pdfShare" style="background:var(--brand)">Enregistrer / Partager</button>
+      </div></div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#pdfClose').onclick=()=>ov.remove();
+    ov.querySelector('#pdfShare').onclick=async()=>{
+      try{ await navigator.share({files:[file],title:filename}); ov.remove(); }
+      catch(e){ if(!(e&&e.name==='AbortError')) toast('Partage indisponible'); }
+    };
+  }else{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1500);
+    toast('PDF téléchargé');
   }
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();
-  setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1500);
 }
 
 /* ---------- utils ---------- */
