@@ -1,5 +1,5 @@
 /* Bung'Eco CQ — service worker (fonctionnement hors ligne) */
-const CACHE = 'bungeco-cq-v4';
+const CACHE = 'bungeco-cq-v5';
 const ASSETS = [
   './',
   './index.html',

@@ -873,6 +873,58 @@ async function handleScan(e){
   reader.readAsDataURL(file);
 }
 
+function largestComponent(bin,w,h){
+  const lbl=new Int32Array(w*h);
+  const stack=new Int32Array(w*h);
+  let best=null;
+  for(let p=0;p<w*h;p++){
+    if(bin[p]&&!lbl[p]){
+      let sp=0; stack[sp++]=p; lbl[p]=1; let size=0;
+      let minX=w,minY=h,maxX=0,maxY=0;
+      let minS=1e9,maxS=-1e9,minD=1e9,maxD=-1e9,cTL,cBR,cTR,cBL;
+      while(sp>0){
+        const q=stack[--sp], qx=q%w, qy=(q/w)|0; size++;
+        if(qx<minX)minX=qx; if(qx>maxX)maxX=qx; if(qy<minY)minY=qy; if(qy>maxY)maxY=qy;
+        const su=qx+qy, di=qx-qy;
+        if(su<minS){minS=su;cTL=[qx,qy];}
+        if(su>maxS){maxS=su;cBR=[qx,qy];}
+        if(di>maxD){maxD=di;cTR=[qx,qy];}
+        if(di<minD){minD=di;cBL=[qx,qy];}
+        if(qx>0){const n=q-1; if(bin[n]&&!lbl[n]){lbl[n]=1;stack[sp++]=n;}}
+        if(qx<w-1){const n=q+1; if(bin[n]&&!lbl[n]){lbl[n]=1;stack[sp++]=n;}}
+        if(qy>0){const n=q-w; if(bin[n]&&!lbl[n]){lbl[n]=1;stack[sp++]=n;}}
+        if(qy<h-1){const n=q+w; if(bin[n]&&!lbl[n]){lbl[n]=1;stack[sp++]=n;}}
+      }
+      const touchAll=(minX===0&&maxX===w-1&&minY===0&&maxY===h-1);
+      if(!best||size>best.size) best={size,corners:[cTL,cTR,cBR,cBL],touchAll,frac:size/(w*h)};
+    }
+  }
+  return best;
+}
+function autoDetectDoc(work){
+  const SD=440;
+  const s=Math.min(1, SD/Math.max(work.width,work.height));
+  const w=Math.max(1,Math.round(work.width*s)), h=Math.max(1,Math.round(work.height*s));
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const cx=c.getContext('2d'); cx.drawImage(work,0,0,w,h);
+  const d=cx.getImageData(0,0,w,h).data;
+  const g=new Uint8Array(w*h);
+  for(let i=0,j=0;i<d.length;i+=4,j++) g[j]=(d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114)|0;
+  // seuil d'Otsu
+  const hist=new Array(256).fill(0); for(let j=0;j<g.length;j++) hist[g[j]]++;
+  const total=g.length; let sumAll=0; for(let t=0;t<256;t++) sumAll+=t*hist[t];
+  let sumB=0,wB=0,mv=-1,thr=127;
+  for(let t=0;t<256;t++){wB+=hist[t]; if(!wB)continue; const wF=total-wB; if(!wF)break; sumB+=t*hist[t]; const mB=sumB/wB,mF=(sumAll-sumB)/wF,v=wB*wF*(mB-mF)*(mB-mF); if(v>mv){mv=v;thr=t;}}
+  const binBright=new Uint8Array(w*h), binDark=new Uint8Array(w*h);
+  for(let j=0;j<g.length;j++){ if(g[j]>thr) binBright[j]=1; else binDark[j]=1; }
+  const a=largestComponent(binBright,w,h), b=largestComponent(binDark,w,h);
+  const score=r=>{ if(!r) return -1; let sc=r.size; if(r.touchAll) sc*=0.15; if(r.frac>0.93) sc*=0.3; if(r.frac<0.08) sc*=0.1; return sc; };
+  const best = score(a)>=score(b) ? a : b;
+  if(!best || best.frac<0.08 || best.frac>0.95) return null;
+  const inv=1/s;
+  return best.corners.map(p=>[Math.max(0,Math.min(work.width,p[0]*inv)), Math.max(0,Math.min(work.height,p[1]*inv))]);
+}
+
 function buildScanner(img){
   // image de travail (réduite pour la performance)
   const MAXW=2000;
@@ -885,7 +937,7 @@ function buildScanner(img){
   let mode='gray';
   const ov=document.createElement('div'); ov.className='scan-ov';
   ov.innerHTML=`
-    <div class="scan-top">Cadrez le document avec les 4 coins</div>
+    <div class="scan-top">Document détecté — ajustez les coins si besoin</div>
     <div class="scan-stage" id="scStage">
       <img id="scImg" src="${work.toDataURL('image/jpeg',0.9)}">
       <svg class="scan-svg" id="scSvg"></svg>
@@ -899,6 +951,7 @@ function buildScanner(img){
       </div>
       <div class="scan-actions">
         <button class="scan-cancel" id="scCancel">Annuler</button>
+        <button class="scan-cancel" id="scAuto">↻ Auto</button>
         <button class="scan-ok" id="scOk">Valider</button>
       </div>
     </div>`;
@@ -909,7 +962,9 @@ function buildScanner(img){
   const svg=ov.querySelector('#scSvg');
   let disp={x:0,y:0,w:1,h:1,scale:1};
   const inset=0.06;
-  let pts=[[work.width*inset,work.height*inset],
+  const detected=autoDetectDoc(work);
+  let pts = detected || [
+           [work.width*inset,work.height*inset],
            [work.width*(1-inset),work.height*inset],
            [work.width*(1-inset),work.height*(1-inset)],
            [work.width*inset,work.height*(1-inset)]];
@@ -954,6 +1009,11 @@ function buildScanner(img){
     ov.querySelectorAll('.scan-modes button').forEach(x=>x.classList.toggle('active',x===b));
   });
   ov.querySelector('#scCancel').onclick=()=>{ window.removeEventListener('resize',layout); ov.remove(); };
+  ov.querySelector('#scAuto').onclick=()=>{
+    const det=autoDetectDoc(work);
+    if(det){ pts=det; draw(); toast('Document détecté'); }
+    else toast('Détection impossible — ajustez les coins');
+  };
   ov.querySelector('#scOk').onclick=async()=>{
     ov.querySelector('#scBusy').style.display='flex';
     await new Promise(r=>setTimeout(r,40));
