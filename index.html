@@ -189,6 +189,34 @@ h1.page-title{font-size:22px;margin:2px 0 16px;letter-spacing:-.3px}
 }
 .photo-add .plus{font-size:24px;line-height:1}
 .photo-add:active{background:var(--amber-soft);border-color:var(--amber)}
+.photo-add.scan{border-color:var(--brand);color:var(--brand)}
+.photo-add.scan:active{background:#e8eef4}
+
+/* ---------- DOCUMENTS ---------- */
+.doc-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:14px 16px}
+.doc-cell{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.doc-cell img{width:100%;display:block}
+.doc-del{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:7px;border:none;background:rgba(22,32,43,.8);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center}
+.doc-empty{padding:14px 16px;color:var(--ink-soft);font-size:13.5px}
+
+/* ---------- SCANNER ---------- */
+.scan-ov{position:fixed;inset:0;z-index:90;background:#0d141b;display:flex;flex-direction:column}
+.scan-top{color:#fff;text-align:center;padding:calc(env(safe-area-inset-top) + 12px) 16px 10px;font-weight:700;font-size:15px;background:#0a1118}
+.scan-stage{flex:1;position:relative;overflow:hidden}
+.scan-stage img{position:absolute;-webkit-user-drag:none;user-select:none;pointer-events:none}
+.scan-svg{position:absolute;left:0;top:0;width:100%;height:100%;touch-action:none}
+.scan-handle{fill:var(--amber);stroke:#fff;stroke-width:2.5}
+.scan-poly{fill:rgba(239,140,26,.10);stroke:var(--amber);stroke-width:2}
+.scan-mask{fill:rgba(8,14,20,.62);fill-rule:evenodd}
+.scan-busy{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;background:rgba(8,14,20,.65);z-index:5}
+.scan-bar{background:#0a1118;padding:12px 14px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px}
+.scan-modes{display:flex;gap:8px}
+.scan-modes button{flex:1;background:#1c2733;color:#cdd8e2;border:1px solid #2b3947;border-radius:9px;padding:10px 4px;font-weight:700;font-size:12.5px}
+.scan-modes button.active{background:var(--amber);color:var(--brand);border-color:var(--amber)}
+.scan-actions{display:flex;gap:10px}
+.scan-actions button{flex:1;border:none;border-radius:10px;padding:14px;font-weight:800;font-size:15px}
+.scan-cancel{background:#1c2733;color:#cdd8e2}
+.scan-ok{background:var(--amber);color:var(--brand)}
 
 /* ---------- STICKY ACTION BAR ---------- */
 .actionbar{
@@ -294,6 +322,7 @@ h1.page-title{font-size:22px;margin:2px 0 16px;letter-spacing:-.3px}
 <!-- hidden file input for photos -->
 <input type="file" id="photoInput" accept="image/*" capture="environment" multiple style="display:none">
 
+
 <script>
 /* ============================================================
    BUNG'ECO — Fiche de contrôle module (100% hors ligne)
@@ -395,6 +424,7 @@ function ficheFromTemplate(tpl){
     technicien:'',
     notes:'',
     photos:[],
+    documents:[],
     sections: tpl.sections.map(s=>({
       id:s.id, title:s.title,
       items: s.items.map(it=>({...it, status:'', value:''}))
@@ -449,7 +479,7 @@ async function renderList(){
         <button class="li-open" data-open="${f.id}">
           <div class="li-main">
             <div class="li-num">${num}</div>
-            <div class="li-meta"><span>📅 ${frDate(f.date)}</span>${f.technicien?`<span>👤 ${escapeHtml(f.technicien)}</span>`:''}${f.photos.length?`<span>📷 ${f.photos.length}</span>`:''}</div>
+            <div class="li-meta"><span>📅 ${frDate(f.date)}</span>${f.technicien?`<span>👤 ${escapeHtml(f.technicien)}</span>`:''}${f.photos.length?`<span>📷 ${f.photos.length}</span>`:''}${(f.documents&&f.documents.length)?`<span>📄 ${f.documents.length}</span>`:''}</div>
           </div>
           <div class="li-prog">${p.done}/${p.total}</div>
         </button>
@@ -574,8 +604,23 @@ function renderFiche(focusNum){
     <div class="section-body">
       <div class="photo-section-title print-only">Photos</div>
       <div class="photo-grid" id="photo-grid">${renderPhotos(f)}
-        <button class="photo-add no-print" id="addPhoto"><span class="plus">＋</span>Ajouter</button>
+        <button class="photo-add no-print" id="addPhoto"><span class="plus">＋</span>Photo</button>
+        <button class="photo-add scan no-print" id="scanDoc"><span class="plus">⛶</span>Scanner doc</button>
       </div>
+    </div>
+  </div>`;
+
+  /* Documents scannés */
+  const docs=f.documents||[];
+  html+=`<div class="section" data-sec="documents">
+    <div class="section-head" data-toggle="documents">
+      <div class="st">Documents</div><div class="st-prog">${docs.length}</div><div class="chev">▾</div>
+    </div>
+    <div class="section-body">
+      <div class="photo-section-title print-only">Documents</div>
+      ${docs.length
+        ? `<div class="doc-grid" id="doc-grid">${renderDocs(f)}</div>`
+        : `<div class="doc-empty no-print">Aucun document. Touchez « Scanner doc » dans la section Photos pour numériser une page.</div>`}
     </div>
   </div>`;
 
@@ -595,6 +640,13 @@ function renderPhotos(f){
   return f.photos.map(ph=>`<div class="photo-cell">
     <img src="${ph.data}" alt="photo">
     <button class="photo-del no-print" data-delphoto="${ph.id}">✕</button>
+  </div>`).join('');
+}
+
+function renderDocs(f){
+  return (f.documents||[]).map(d=>`<div class="doc-cell">
+    <img src="${d.data}" alt="document">
+    <button class="doc-del no-print" data-deldoc="${d.id}">✕</button>
   </div>`).join('');
 }
 
@@ -650,6 +702,21 @@ function bindFiche(){
       autosave(); renderFiche();
     };
   });
+
+  // scanner de document
+  const sd=document.getElementById('scanDoc');
+  if(sd) sd.onclick=()=>{
+    const input=document.getElementById('photoInput');
+    input.value='';
+    input.onchange=handleScan;
+    input.click();
+  };
+  app.querySelectorAll('[data-deldoc]').forEach(b=>{
+    b.onclick=()=>{
+      f.documents=(f.documents||[]).filter(d=>d.id!==b.dataset.deldoc);
+      autosave(); renderFiche();
+    };
+  });
 }
 
 function findItem(sid,iid){
@@ -659,9 +726,9 @@ function findItem(sid,iid){
 
 async function resetFiche(){
   const f=STATE.fiche; if(!f)return;
-  const ok=await confirmDialog("Réinitialiser cette fiche ?\n\nToutes les données saisies seront effacées : numéro, contrôleur, notes, statuts, valeurs et photos. La fiche n'est pas supprimée.",{okLabel:'Réinitialiser'});
+  const ok=await confirmDialog("Réinitialiser cette fiche ?\n\nToutes les données saisies seront effacées : numéro, contrôleur, notes, statuts, valeurs, photos et documents. La fiche n'est pas supprimée.",{okLabel:'Réinitialiser'});
   if(!ok)return;
-  f.numero=''; f.technicien=''; f.notes=''; f.date=todayISO(); f.photos=[];
+  f.numero=''; f.technicien=''; f.notes=''; f.date=todayISO(); f.photos=[]; f.documents=[];
   f.sections.forEach(s=>s.items.forEach(it=>{it.status=''; it.value='';}));
   autosave();
   renderFiche(true);
@@ -792,6 +859,215 @@ function bindTemplate(){
 }
 
 /* ============================================================
+   SCANNER DE DOCUMENT (cadrage + redressement de perspective)
+   ============================================================ */
+async function handleScan(e){
+  const file=e.target.files&&e.target.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>buildScanner(img);
+    img.onerror=()=>toast('Image illisible');
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function buildScanner(img){
+  // image de travail (réduite pour la performance)
+  const MAXW=2000;
+  const sc=Math.min(1, MAXW/Math.max(img.naturalWidth,img.naturalHeight));
+  const work=document.createElement('canvas');
+  work.width=Math.max(1,Math.round(img.naturalWidth*sc));
+  work.height=Math.max(1,Math.round(img.naturalHeight*sc));
+  work.getContext('2d').drawImage(img,0,0,work.width,work.height);
+
+  let mode='gray';
+  const ov=document.createElement('div'); ov.className='scan-ov';
+  ov.innerHTML=`
+    <div class="scan-top">Cadrez le document avec les 4 coins</div>
+    <div class="scan-stage" id="scStage">
+      <img id="scImg" src="${work.toDataURL('image/jpeg',0.9)}">
+      <svg class="scan-svg" id="scSvg"></svg>
+      <div class="scan-busy" id="scBusy" style="display:none">Traitement…</div>
+    </div>
+    <div class="scan-bar">
+      <div class="scan-modes">
+        <button data-mode="color">Couleur</button>
+        <button data-mode="gray" class="active">Niveaux de gris</button>
+        <button data-mode="bw">Noir &amp; blanc</button>
+      </div>
+      <div class="scan-actions">
+        <button class="scan-cancel" id="scCancel">Annuler</button>
+        <button class="scan-ok" id="scOk">Valider</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+
+  const stage=ov.querySelector('#scStage');
+  const imgEl=ov.querySelector('#scImg');
+  const svg=ov.querySelector('#scSvg');
+  let disp={x:0,y:0,w:1,h:1,scale:1};
+  const inset=0.06;
+  let pts=[[work.width*inset,work.height*inset],
+           [work.width*(1-inset),work.height*inset],
+           [work.width*(1-inset),work.height*(1-inset)],
+           [work.width*inset,work.height*(1-inset)]];
+
+  const toDisp=p=>[disp.x+p[0]*disp.scale, disp.y+p[1]*disp.scale];
+
+  function layout(){
+    const sr=stage.getBoundingClientRect();
+    const ar=work.width/work.height;
+    let w=sr.width, h=w/ar;
+    if(h>sr.height){h=sr.height;w=h*ar;}
+    const x=(sr.width-w)/2, y=(sr.height-h)/2;
+    imgEl.style.width=w+'px'; imgEl.style.height=h+'px'; imgEl.style.left=x+'px'; imgEl.style.top=y+'px';
+    disp={x,y,w,h,scale:w/work.width};
+    svg.setAttribute('viewBox',`0 0 ${sr.width} ${sr.height}`);
+    draw();
+  }
+  function draw(){
+    const sr=stage.getBoundingClientRect();
+    const d=pts.map(toDisp);
+    const outer=`M0,0 H${sr.width} V${sr.height} H0 Z`;
+    const inner=`M${d[0][0]},${d[0][1]} L${d[1][0]},${d[1][1]} L${d[2][0]},${d[2][1]} L${d[3][0]},${d[3][1]} Z`;
+    let s=`<path class="scan-mask" d="${outer} ${inner}"/>`;
+    s+=`<polygon class="scan-poly" points="${d.map(p=>p.join(',')).join(' ')}"/>`;
+    d.forEach((p,i)=>{ s+=`<circle class="scan-handle" data-i="${i}" cx="${p[0]}" cy="${p[1]}" r="14"/>`; });
+    svg.innerHTML=s;
+    svg.querySelectorAll('.scan-handle').forEach(h=>h.addEventListener('pointerdown',startDrag));
+  }
+  let drag=null;
+  function startDrag(e){ e.preventDefault(); drag=+e.currentTarget.dataset.i; try{svg.setPointerCapture(e.pointerId);}catch(_){} svg.addEventListener('pointermove',moveDrag); svg.addEventListener('pointerup',endDrag); svg.addEventListener('pointercancel',endDrag); }
+  function moveDrag(e){
+    if(drag==null)return;
+    const sr=stage.getBoundingClientRect();
+    let wx=(e.clientX-sr.left-disp.x)/disp.scale, wy=(e.clientY-sr.top-disp.y)/disp.scale;
+    pts[drag]=[Math.max(0,Math.min(work.width,wx)), Math.max(0,Math.min(work.height,wy))];
+    draw();
+  }
+  function endDrag(){ drag=null; svg.removeEventListener('pointermove',moveDrag); svg.removeEventListener('pointerup',endDrag); svg.removeEventListener('pointercancel',endDrag); }
+
+  ov.querySelectorAll('.scan-modes button').forEach(b=>b.onclick=()=>{
+    mode=b.dataset.mode;
+    ov.querySelectorAll('.scan-modes button').forEach(x=>x.classList.toggle('active',x===b));
+  });
+  ov.querySelector('#scCancel').onclick=()=>{ window.removeEventListener('resize',layout); ov.remove(); };
+  ov.querySelector('#scOk').onclick=async()=>{
+    ov.querySelector('#scBusy').style.display='flex';
+    await new Promise(r=>setTimeout(r,40));
+    try{
+      const out=warpAndFilter(work, pts, mode);
+      const data=out.toDataURL('image/jpeg',0.82);
+      if(!STATE.fiche.documents) STATE.fiche.documents=[];
+      STATE.fiche.documents.push({id:uid(), data});
+      autosave();
+      window.removeEventListener('resize',layout); ov.remove(); renderFiche();
+      toast('Document ajouté');
+    }catch(err){ console.error(err); ov.querySelector('#scBusy').style.display='none'; toast('Échec du traitement'); }
+  };
+  window.addEventListener('resize',layout);
+  requestAnimationFrame(layout);
+}
+
+function dist(a,b){return Math.hypot(a[0]-b[0],a[1]-b[1]);}
+function orderCorners(p){
+  const s=p.map(q=>q[0]+q[1]), d=p.map(q=>q[1]-q[0]);
+  return [ p[s.indexOf(Math.min(...s))], p[d.indexOf(Math.min(...d))],
+           p[s.indexOf(Math.max(...s))], p[d.indexOf(Math.max(...d))] ];
+}
+function solveH(dst,src){
+  const A=[],b=[];
+  for(let i=0;i<4;i++){
+    const [X,Y]=dst[i],[x,y]=src[i];
+    A.push([X,Y,1,0,0,0,-X*x,-Y*x]); b.push(x);
+    A.push([0,0,0,X,Y,1,-X*y,-Y*y]); b.push(y);
+  }
+  const n=b.length, M=A.map((r,i)=>r.concat(b[i]));
+  for(let col=0;col<n;col++){
+    let piv=col;
+    for(let r=col+1;r<n;r++) if(Math.abs(M[r][col])>Math.abs(M[piv][col])) piv=r;
+    [M[col],M[piv]]=[M[piv],M[col]];
+    const dv=M[col][col]||1e-9;
+    for(let c=col;c<=n;c++) M[col][c]/=dv;
+    for(let r=0;r<n;r++){ if(r===col)continue; const fr=M[r][col]; for(let c=col;c<=n;c++) M[r][c]-=fr*M[col][c]; }
+  }
+  return M.map(r=>r[n]);
+}
+function warpAndFilter(work, srcPts, mode){
+  const q=orderCorners(srcPts);
+  const wTop=dist(q[0],q[1]), wBot=dist(q[3],q[2]);
+  const hL=dist(q[0],q[3]), hR=dist(q[1],q[2]);
+  let outW=Math.round(Math.max(wTop,wBot)), outH=Math.round(Math.max(hL,hR));
+  const cap=1654;
+  const k=Math.min(1, cap/Math.max(outW,outH,1));
+  outW=Math.max(1,Math.round(outW*k)); outH=Math.max(1,Math.round(outH*k));
+
+  const sctx=work.getContext('2d');
+  const sdata=sctx.getImageData(0,0,work.width,work.height);
+  const sp=sdata.data, sw=work.width, sh=work.height;
+  const H=solveH([[0,0],[outW,0],[outW,outH],[0,outH]], q);
+
+  const out=document.createElement('canvas'); out.width=outW; out.height=outH;
+  const octx=out.getContext('2d');
+  const odata=octx.createImageData(outW,outH);
+  const op=odata.data;
+  for(let y=0;y<outH;y++){
+    for(let x=0;x<outW;x++){
+      const den=H[6]*x+H[7]*y+1;
+      const sx=(H[0]*x+H[1]*y+H[2])/den, sy=(H[3]*x+H[4]*y+H[5])/den;
+      const o=(y*outW+x)*4;
+      if(sx<0||sy<0||sx>=sw-1||sy>=sh-1){ op[o]=op[o+1]=op[o+2]=255; op[o+3]=255; continue; }
+      const x0=sx|0, y0=sy|0, fx=sx-x0, fy=sy-y0;
+      const i00=(y0*sw+x0)*4, i10=i00+4, i01=i00+sw*4, i11=i01+4;
+      for(let c=0;c<3;c++){
+        const a=sp[i00+c]*(1-fx)+sp[i10+c]*fx;
+        const bb=sp[i01+c]*(1-fx)+sp[i11+c]*fx;
+        op[o+c]=a*(1-fy)+bb*fy;
+      }
+      op[o+3]=255;
+    }
+  }
+  applyScanMode(op, mode);
+  octx.putImageData(odata,0,0);
+  return out;
+}
+function applyScanMode(p, mode){
+  if(mode==='color') return;
+  const n=p.length, gray=new Uint8ClampedArray(n/4);
+  let min=255,max=0;
+  for(let i=0,j=0;i<n;i+=4,j++){
+    const g=(p[i]*0.299+p[i+1]*0.587+p[i+2]*0.114)|0;
+    gray[j]=g; if(g<min)min=g; if(g>max)max=g;
+  }
+  if(mode==='gray'){
+    const range=Math.max(1,max-min);
+    for(let i=0,j=0;i<n;i+=4,j++){
+      const v=(gray[j]-min)*255/range;
+      p[i]=p[i+1]=p[i+2]=v;
+    }
+    return;
+  }
+  // noir & blanc : seuil automatique d'Otsu
+  const hist=new Array(256).fill(0);
+  for(let j=0;j<gray.length;j++) hist[gray[j]]++;
+  const total=gray.length;
+  let sumAll=0; for(let t=0;t<256;t++) sumAll+=t*hist[t];
+  let sumB=0,wB=0,maxVar=-1,thr=127;
+  for(let t=0;t<256;t++){
+    wB+=hist[t]; if(wB===0)continue; const wF=total-wB; if(wF===0)break;
+    sumB+=t*hist[t];
+    const mB=sumB/wB, mF=(sumAll-sumB)/wF, v=wB*wF*(mB-mF)*(mB-mF);
+    if(v>maxVar){maxVar=v;thr=t;}
+  }
+  for(let i=0,j=0;i<n;i+=4,j++){
+    const v=gray[j]>thr?255:0;
+    p[i]=p[i+1]=p[i+2]=v;
+  }
+}
+
+/* ============================================================
    EXPORT PDF (génération native, hors ligne via jsPDF embarqué)
    ============================================================ */
 async function exportFiche(f){ if(!f)return; await buildAndDeliver(f); }
@@ -912,6 +1188,26 @@ async function generatePDF(f){
       if(col===cols){ y=rowTop+rowMaxH+gap; col=0; rowMaxH=0; }
     }
     if(col!==0){ y=rowTop+rowMaxH+gap; }
+  }
+
+  // ---- documents scannés ----
+  const fdocs=f.documents||[];
+  if(fdocs.length){
+    ensure(9);
+    doc.setFillColor(...C.brand);doc.rect(M,y,CW,7,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(9.5);
+    doc.text('DOCUMENTS',M+3,y+4.8);y+=10;
+    for(const d of fdocs){
+      let img; try{img=await loadImg(d.data);}catch(e){continue;}
+      const ar=img.width/img.height;
+      let w=CW, h=w/ar; const maxH=PH-2*M-14;
+      if(h>maxH){h=maxH;w=h*ar; if(w>CW){w=CW;h=w/ar;}}
+      ensure(h+4);
+      const x=M+(CW-w)/2;
+      try{doc.addImage(d.data,'JPEG',x,y,w,h);}catch(e){}
+      doc.setDrawColor(...C.line);doc.setLineWidth(0.3);doc.rect(x,y,w,h);
+      y+=h+4;
+    }
   }
 
   // ---- pied de page ----
