@@ -1,8 +1,9 @@
 /* Bung'Eco CQ — service worker (fonctionnement hors ligne) */
-const CACHE = 'bungeco-cq-v2';
+const CACHE = 'bungeco-cq-v3';
 const ASSETS = [
   './',
   './index.html',
+  './jspdf.umd.min.js',
   './manifest.webmanifest',
   './apple-touch-icon-180.png',
   './icon-192.png',
